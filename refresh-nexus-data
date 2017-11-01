@@ -149,7 +149,7 @@ get_latest_snapshot_version() {
     # lookup the current latest snapshot and build time
     curl -s -f -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/$product/maven-metadata.xml" > "$SNAPSHOT_VERSION_FILE"
     remote_build="$( sed -n 's/^[ \t]*<lastUpdated>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" )"
-    snapshot_version="$( sed -n 's/^[ \t]*<latest>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" )"
+    snapshot_version="$( sed -n 's/^[ \t]*<version>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" | tail -1)"
 }
 
 full_build_string=""
@@ -216,24 +216,25 @@ update_shell_snapshot() {
     fi
 }
 
-readonly UPDATE_SITE_SNAPSHOT_VERSION_FILE="$TARGET_DIR/update-site-snapshot"
 update_update_site_snapshot() {
+    local readonly product="$1" target="$2"
+    local readonly UPDATE_SITE_SNAPSHOT_VERSION_FILE="$TARGET_DIR/$product-snapshot"
     local readonly current_build_snapshot=$( cat "$UPDATE_SITE_SNAPSHOT_VERSION_FILE")
 
     # lookup the current latest snapshot and build time
-    get_latest_snapshot_version "rascal-update-site"
+    get_latest_snapshot_version "$product"
     local readonly remote_build_snapshot="$snapshot_version-$remote_build"
 
     if [[ "$current_build_snapshot" != "$remote_build_snapshot" ]]; then
-        echo "Downloading new rascal-update-snapshot ($remote_build_snapshot)"
+        echo "Downloading new $product ($remote_build_snapshot)"
 
         # get the full build version string from the meta data file
-        get_full_build_string "rascal-update-site" "$snapshot_version"
+        get_full_build_string "$product" "$snapshot_version"
 
         # now download the zip
         local readonly new_file="$SCRATCH/update-site.zip"
-        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/rascal-update-site/$snapshot_version/rascal-update-site-$full_build_string.zip" > "$new_file" ; then
-            echo "Failed downloading rascal-update-site: $full_build_string from nexus"
+        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/$product/$snapshot_version/$product-$full_build_string.zip" > "$new_file" ; then
+            echo "Failed downloading $product: $full_build_string from nexus"
             exit 2
         else
             local readonly new_dir="$SCRATCH/update-site"
@@ -242,13 +243,13 @@ update_update_site_snapshot() {
                 exit 4
             fi
 
-            local readonly target_update="$TARGET_DIR/unstable"
+            local readonly target_update="$target"
             if [ ! -d "$target_update" ]; then
                 if ! mv "$new_dir" "$target_update"; then
                     echo "Could not create new directory"
                     exit 4
                 else
-                    echo "Created new unstable directory"
+                    echo "Created new update-site directory"
                     ANY_CHANGES=true
                     echo -n "$remote_build_snapshot" > "$UPDATE_SITE_SNAPSHOT_VERSION_FILE"
                 fi
@@ -282,7 +283,8 @@ download_all_releases
 update_stable_pointers 
 
 update_shell_snapshot
-update_update_site_snapshot
+update_update_site_snapshot "rascal-update-site" "$TARGET_DIR/unstable"
+update_update_site_snapshot "rascal-eclipse-libraries-update-site" "$TARGET_DIR/libs"
 
 echo "$ANY_CHANGES"
 #update_unstable
