@@ -11,7 +11,7 @@ node {
 
 
         stage 'Deploy'
-        # warning don't change the version number without also changing the server version of the cron script
+        // warning don't change the version number without also changing the server version of the cron script
         sh "mvn deploy:deploy-file -DgroupId=org.rascalmpl -DartifactId=update-site-script -Dversion=1.0.0-SNAPSHOT -Dclassifier=${gitTag} -DgeneratePom=false -Dpackaging=sh -DrepositoryId=usethesource-snapshots -Durl=http://nexus.usethesource.io/content/repositories/snapshots/ -Dfile=refresh-nexus-data"
 
     } catch(e) {
