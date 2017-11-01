@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+
+# safer bash script 
+set -o nounset -o errexit -o pipefail
+# don't split on spaces, only on lines
+IFS=$'\n\t'
+
+#----------------------------------------#
+#            Configuration               #
+#----------------------------------------#
+# Update variables below after a 
+# new release
+
+# aka rascal version
+readonly SHELL_STABLE_VERSION="0.9.0"
+# aka rascal-eclipse version
+readonly UPDATE_STABLE_VERSION="0.9.0"
+
+
+#----------------------------------------#
+#            Implementation              #
+#----------------------------------------#
+
+if [ $# -ne 1 ]; then
+    echo "You must supply the target directory in which the output is stored."
+    exit 1
+fi
+
+readonly TARGET_DIR="$1"
+readonly NEXUS_ROOT="http://nexus.usethesource.io/"
+
+readonly SCRATCH=$(mktemp -d -t "sync-nexus-XXXXX")
+finish() {
+  rm -rf "$SCRATCH"
+}
+trap finish EXIT
+
+ANY_CHANGES=false
+
+download_console() {
+    if [ ! -d "$TARGET_DIR/console" ]; then
+        echo "The target directory does not contain a console subdirectory, please make sure the target directory is the right directory."
+        exit 1
+    fi
+    local readonly version="$1"
+    local readonly target_jar="$TARGET_DIR/console/rascal-$version.jar"
+    if [ ! -f "$target_jar" ]; then
+        echo "Downloading console $version from nexus"
+        if ! curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/resolve?g=org.rascalmpl&a=rascal&r=releases&v=$version" > /dev/null; then
+            echo "Error downloading $version from nexus (version is not available)"
+            exit 2
+        else
+            curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/content?g=org.rascalmpl&a=rascal&r=releases&v=$version" > "$target_jar"
+            echo "Succesfully downloaded $version"
+            ANY_CHANGES=true
+        fi
+    fi
+}
+
+download_update_site() {
+    if [ ! -d "$TARGET_DIR/archive" ]; then
+        echo "The target directory does not contain a archive subdirectory, please make sure the target directory is the right directory."
+        exit 1
+    fi
+
+    local readonly version="$1"
+    local readonly target_update_site="$TARGET_DIR/archive/$version"
+
+    if [ ! -d "$target_update_site" ]; then
+        echo "Downloading update site $version from nexus"
+        local readonly zip_file="$SCRATCH/update-site.zip"
+
+        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/$version/rascal-update-site-$version.zip" > "$zip_file" ; then
+            echo "Error in downloading update site from nexus, version might not exist?"
+            exit 2;
+        else
+            # zip file has been downloaded, unpack and move to the 
+            mkdir "$target_update_site"
+            if ! unzip -qq "$zip_file" -d "$target_update_site"; then
+                echo "unpacking zip downloaded for version $version failed"
+                rm -rf "$target_update_site"
+                exit 3;
+            else
+                echo "Succesfully downloaded $version"
+                ANY_CHANGES=true
+            fi
+        fi
+    fi
+}
+
+download_all_releases() {
+    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
+        download_console $version
+    done
+    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
+        download_update_site $version
+    done
+}
+
+update_stable_pointers() {
+    # shell
+    local readonly stable_shell_file="$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar"
+    if [ ! -f "$stable_shell_file" ]; then
+        echo "Stable shell: $SHELL_STABLE_VERSION does not exits in $TARGET_DIR/console/, are you sure it is released?"
+        exit 1
+    fi
+    local readonly stable_shell_symlink="$TARGET_DIR/console/rascal-shell-stable.jar"
+    if [ ! -f "$stable_shell_symlink" ]; then
+        ln -s "$stable_shell_file" "$stable_shell_symlink"
+        ANY_CHANGES=true
+    else
+        if [[ $( readlink "$stable_shell_symlink" || "") != "$stable_shell_file" ]]; then
+            ln -fs "$stable_shell_file" "$stable_shell_symlink"
+            ANY_CHANGES=true
+        fi
+    fi
+
+    # update site
+    local readonly stable_update_dir="$TARGET_DIR/archive/$UPDATE_STABLE_VERSION"
+    if [ ! -d "$stable_update_dir" ]; then
+        echo "Stable update-site: $UPDATE_STABLE_VERSION does not exists in $TARGET_DIR/archive/, are you sure it's been released?"
+        exit 1
+    fi
+    local readonly stable_update_dir_symlink="$TARGET_DIR/stable"
+    if [ ! -d "$stable_update_dir_symlink" ]; then
+        ln -s "$stable_update_dir" "$stable_update_dir_symlink"
+        ANY_CHANGES=true
+    else
+        if [[ "$( readlink "$stable_update_dir_symlink" || "")" != "$stable_update_dir" ]]; then
+            ln -fns "$stable_update_dir" "$stable_update_dir_symlink"
+            ANY_CHANGES=true
+        fi
+    fi
+}
+
+
+
+
+readonly SNAPSHOT_VERSION_FILE="$SCRATCH/current-snapshot-version.xml"
+remote_build=""
+snapshot_version=""
+get_latest_snapshot_version() {
+    local readonly product="$1"
+
+    # lookup the current latest snapshot and build time
+    curl -s -f -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/$product/maven-metadata.xml" > "$SNAPSHOT_VERSION_FILE"
+    remote_build="$( sed -n 's/^[ \t]*<lastUpdated>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" )"
+    snapshot_version="$( sed -n 's/^[ \t]*<latest>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" )"
+}
+
+full_build_string=""
+get_full_build_string() {
+    local readonly product="$1" snapshot="$2"
+
+    curl -s -f -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/$product/$snapshot/maven-metadata.xml" > "$SNAPSHOT_VERSION_FILE"
+    full_build_string="$( sed -n 's/^[ \t]*<value>\([^<]*\)<.*$/\1/p' "$SNAPSHOT_VERSION_FILE" | uniq )"
+}
+
+readonly SHELL_SNAPSHOT_VERSION_FILE="$TARGET_DIR/shell-snapshot"
+update_shell_snapshot() {
+    local readonly current_build_snapshot=$( cat "$SHELL_SNAPSHOT_VERSION_FILE")
+
+    # lookup the current latest snapshot and build time
+    get_latest_snapshot_version "rascal"
+    local readonly remote_build_snapshot="$snapshot_version-$remote_build"
+
+    if [[ "$current_build_snapshot" != "$remote_build_snapshot" ]]; then
+        echo "Downloading new rascal-shell-snapshot ($remote_build_snapshot)"
+
+        # get the full build version string from the meta data file
+        get_full_build_string "rascal" "$snapshot_version"
+
+        # now download the jar
+        local readonly new_file="$SCRATCH/rascal-shell-unstable.jar"
+        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/rascal/$snapshot_version/rascal-$full_build_string.jar" > "$new_file" ; then
+            echo "Failed downloading rascal-shell: $full_build_string from nexus"
+            exit 2
+        else
+            local readonly target_file="$TARGET_DIR/console/rascal-shell-unstable.jar"
+            if [ ! -f "$target_file" ]; then
+                if ! mv "$new_file" "$target_file"; then
+                    echo "Could not create new file"
+                    exit 4
+                else
+                    echo "Created unstable shell jar"
+                    ANY_CHANGES=true
+                    echo -n "$remote_build_snapshot" > "$SHELL_SNAPSHOT_VERSION_FILE"
+                fi
+                return
+            fi
+
+            local readonly target_file_backup="$TARGET_DIR/console/rascal-shell-unstable.jar-backup"
+            if [ -f "$target_file_backup" ]; then
+                echo "$target_file_backup still existed, something went wrong?"
+                exit 4
+            fi
+            if ! mv "$target_file" "$target_file_backup"; then
+                echo "could not replace target file, might be in use, try again next time?"
+                exit 4
+            fi
+            if ! mv "$new_file" "$target_file"; then
+                mv "$target_file_backup" "$target_file"
+                echo "Could not replace the file with the new file, putting back the old file"
+                exit 4
+            else
+                echo "Replaced unstable shell jar"
+                ANY_CHANGES=true
+                echo -n "$remote_build_snapshot" > "$SHELL_SNAPSHOT_VERSION_FILE"
+                rm "$target_file_backup"
+            fi
+        fi
+    fi
+}
+
+readonly UPDATE_SITE_SNAPSHOT_VERSION_FILE="$TARGET_DIR/update-site-snapshot"
+update_update_site_snapshot() {
+    local readonly current_build_snapshot=$( cat "$UPDATE_SITE_SNAPSHOT_VERSION_FILE")
+
+    # lookup the current latest snapshot and build time
+    get_latest_snapshot_version "rascal-update-site"
+    local readonly remote_build_snapshot="$snapshot_version-$remote_build"
+
+    if [[ "$current_build_snapshot" != "$remote_build_snapshot" ]]; then
+        echo "Downloading new rascal-update-snapshot ($remote_build_snapshot)"
+
+        # get the full build version string from the meta data file
+        get_full_build_string "rascal-update-site" "$snapshot_version"
+
+        # now download the zip
+        local readonly new_file="$SCRATCH/update-site.zip"
+        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/rascal-update-site/$snapshot_version/rascal-update-site-$full_build_string.zip" > "$new_file" ; then
+            echo "Failed downloading rascal-update-site: $full_build_string from nexus"
+            exit 2
+        else
+            local readonly new_dir="$SCRATCH/update-site"
+            if ! unzip -qq "$new_file" -d "$new_dir"; then
+                echo "unpacking zip downloaded for version $version failed"
+                exit 4
+            fi
+
+            local readonly target_update="$TARGET_DIR/unstable"
+            if [ ! -d "$target_update" ]; then
+                if ! mv "$new_dir" "$target_update"; then
+                    echo "Could not create new directory"
+                    exit 4
+                else
+                    echo "Created new unstable directory"
+                    ANY_CHANGES=true
+                    echo -n "$remote_build_snapshot" > "$UPDATE_SITE_SNAPSHOT_VERSION_FILE"
+                fi
+                return
+            fi
+
+            local readonly target_update_backup="$target_update-backup"
+            if [ -d "$target_update_backup" ]; then
+                echo "$target_update_backup still existed, something went wrong?"
+                exit 4
+            fi
+            if ! mv "$target_update" "$target_update_backup"; then
+                echo "could not replace target file, might be in use, try again next time?"
+                exit 4
+            fi
+            if ! mv "$new_dir" "$target_update"; then
+                mv "$target_update_backup" "$target_update"
+                echo "Could not replace the file with the new file, putting back the old file"
+                exit 4
+            else
+                echo "Replaced unstable update-site"
+                ANY_CHANGES=true
+                echo -n "$remote_build_snapshot" > "$UPDATE_SITE_SNAPSHOT_VERSION_FILE"
+                rm -r "$target_update_backup"
+            fi
+        fi
+    fi
+}
+
+download_all_releases
+update_stable_pointers 
+
+update_shell_snapshot
+update_update_site_snapshot
+
+echo "$ANY_CHANGES"
+#update_unstable
+
+
+#download_update_site "0.9.3"
+#download_console "0.9.5"
+#download_console "0.9.7"
+
