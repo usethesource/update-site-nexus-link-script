@@ -5,6 +5,8 @@ set -o nounset -o errexit -o pipefail
 # don't split on spaces, only on lines
 IFS=$'\n\t'
 
+echoerr() { echo "$@" 1>&2; }
+
 #----------------------------------------#
 #            Configuration               #
 #----------------------------------------#
@@ -22,7 +24,7 @@ readonly UPDATE_STABLE_VERSION="0.9.0"
 #----------------------------------------#
 
 if [ $# -ne 1 ]; then
-    echo "You must supply the target directory in which the output is stored."
+    echoerr "You must supply the target directory in which the output is stored."
     exit 1
 fi
 
@@ -39,7 +41,7 @@ ANY_CHANGES=false
 
 download_console() {
     if [ ! -d "$TARGET_DIR/console" ]; then
-        echo "The target directory does not contain a console subdirectory, please make sure the target directory is the right directory."
+        echoerr "The target directory does not contain a console subdirectory, please make sure the target directory is the right directory."
         exit 1
     fi
     local readonly version="$1"
@@ -47,7 +49,7 @@ download_console() {
     if [ ! -f "$target_jar" ]; then
         echo "Downloading console $version from nexus"
         if ! curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/resolve?g=org.rascalmpl&a=rascal&r=releases&v=$version" > /dev/null; then
-            echo "Error downloading $version from nexus (version is not available)"
+            echoerr "Error downloading $version from nexus (version is not available)"
             exit 2
         else
             curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/content?g=org.rascalmpl&a=rascal&r=releases&v=$version" > "$target_jar"
@@ -59,7 +61,7 @@ download_console() {
 
 download_update_site() {
     if [ ! -d "$TARGET_DIR/archive" ]; then
-        echo "The target directory does not contain a archive subdirectory, please make sure the target directory is the right directory."
+        echoerr "The target directory does not contain a archive subdirectory, please make sure the target directory is the right directory."
         exit 1
     fi
 
@@ -71,13 +73,13 @@ download_update_site() {
         local readonly zip_file="$SCRATCH/update-site.zip"
 
         if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/$version/rascal-update-site-$version.zip" > "$zip_file" ; then
-            echo "Error in downloading update site from nexus, version might not exist?"
+            echoerr "Error in downloading update site from nexus, version might not exist?"
             exit 2;
         else
             # zip file has been downloaded, unpack and move to the 
             mkdir "$target_update_site"
             if ! unzip -qq "$zip_file" -d "$target_update_site"; then
-                echo "unpacking zip downloaded for version $version failed"
+                echoerr "unpacking zip downloaded for version $version failed"
                 rm -rf "$target_update_site"
                 exit 3;
             else
@@ -103,7 +105,7 @@ update_stable_pointers() {
     # shell
     local readonly stable_shell_file="$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar"
     if [ ! -f "$stable_shell_file" ]; then
-        echo "Stable shell: $SHELL_STABLE_VERSION does not exits in $TARGET_DIR/console/, are you sure it is released?"
+        echoerr "Stable shell: $SHELL_STABLE_VERSION does not exits in $TARGET_DIR/console/, are you sure it is released?"
         exit 1
     fi
     local readonly stable_shell_symlink="$TARGET_DIR/console/rascal-shell-stable.jar"
@@ -120,7 +122,7 @@ update_stable_pointers() {
     # update site
     local readonly stable_update_dir="$TARGET_DIR/archive/$UPDATE_STABLE_VERSION"
     if [ ! -d "$stable_update_dir" ]; then
-        echo "Stable update-site: $UPDATE_STABLE_VERSION does not exists in $TARGET_DIR/archive/, are you sure it's been released?"
+        echoerr "Stable update-site: $UPDATE_STABLE_VERSION does not exists in $TARGET_DIR/archive/, are you sure it's been released?"
         exit 1
     fi
     local readonly stable_update_dir_symlink="$TARGET_DIR/stable"
@@ -175,13 +177,13 @@ update_shell_snapshot() {
         # now download the jar
         local readonly new_file="$SCRATCH/rascal-shell-unstable.jar"
         if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/rascal/$snapshot_version/rascal-$full_build_string.jar" > "$new_file" ; then
-            echo "Failed downloading rascal-shell: $full_build_string from nexus"
+            echoerr "Failed downloading rascal-shell: $full_build_string from nexus"
             exit 2
         else
             local readonly target_file="$TARGET_DIR/console/rascal-shell-unstable.jar"
             if [ ! -f "$target_file" ]; then
                 if ! mv "$new_file" "$target_file"; then
-                    echo "Could not create new file"
+                    echoerr "Could not create new file"
                     exit 4
                 else
                     echo "Created unstable shell jar"
@@ -193,16 +195,16 @@ update_shell_snapshot() {
 
             local readonly target_file_backup="$TARGET_DIR/console/rascal-shell-unstable.jar-backup"
             if [ -f "$target_file_backup" ]; then
-                echo "$target_file_backup still existed, something went wrong?"
+                echoerr "$target_file_backup still existed, something went wrong?"
                 exit 4
             fi
             if ! mv "$target_file" "$target_file_backup"; then
-                echo "could not replace target file, might be in use, try again next time?"
+                echoerr "could not replace target file, might be in use, try again next time?"
                 exit 4
             fi
             if ! mv "$new_file" "$target_file"; then
                 mv "$target_file_backup" "$target_file"
-                echo "Could not replace the file with the new file, putting back the old file"
+                echoerr "Could not replace the file with the new file, putting back the old file"
                 exit 4
             else
                 echo "Replaced unstable shell jar"
