@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+###############################################
+#                   Warning                   #
+###############################################
+# this file has to be manually copied to 
+# the right server, so be careful with changes
+# in this file
+
+# safer bash script 
+set -o nounset -o errexit -o pipefail
+# don't split on spaces, only on lines
+IFS=$'\n\t'
+
+readonly TARGET_DIR="$1"
+readonly NEXUS_ROOT="http://nexus.usethesource.io/content/repositories/snapshots/org/rascalmpl/update-site-script/1.0.0-SNAPSHOT"
+
+curl -s -f -L "$NEXUS_ROOT/maven-metadata.xml" > /tmp/manifest.xml
+
+readonly last_script_version=$( sed -n 's/^[ \t]*<value>\([^<]*\)<.*$/\1/p' /tmp/manifest.xml | tail -1 )
+readonly last_script_revision=$( sed -n 's/^[ \t]*<classifier>\([^<]*\)<.*$/\1/p' /tmp/manifest.xml | tail -1 )
+
+bash <( curl -s -f -L "$NEXUS_ROOT/update-site-script-1.0.0-$last_script_version-$last_script_revision.sh" )
