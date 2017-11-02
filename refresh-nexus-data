@@ -101,42 +101,56 @@ download_all_releases() {
     done
 }
 
-update_stable_pointers() {
-    # shell
-    local readonly stable_shell_file="$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar"
-    if [ ! -f "$stable_shell_file" ]; then
-        echoerr "Stable shell: $SHELL_STABLE_VERSION does not exits in $TARGET_DIR/console/, are you sure it is released?"
+replace_file_symlink() {
+    local readonly source="$1" target="$2"
+    if [ ! -f "$source" ]; then
+        echoerr "$source does not exists, are you sure it is released?"
         exit 1
     fi
-    local readonly stable_shell_symlink="$TARGET_DIR/console/rascal-shell-stable.jar"
-    if [ ! -f "$stable_shell_symlink" ]; then
-        ln -s "$stable_shell_file" "$stable_shell_symlink"
+    if [ ! -f "$target" ]; then
+        ln -s "$source" "$target"
         ANY_CHANGES=true
     else
-        if [[ $( readlink "$stable_shell_symlink" || "") != "$stable_shell_file" ]]; then
-            ln -fs "$stable_shell_file" "$stable_shell_symlink"
-            ANY_CHANGES=true
-        fi
-    fi
-
-    # update site
-    local readonly stable_update_dir="$TARGET_DIR/archive/$UPDATE_STABLE_VERSION"
-    if [ ! -d "$stable_update_dir" ]; then
-        echoerr "Stable update-site: $UPDATE_STABLE_VERSION does not exists in $TARGET_DIR/archive/, are you sure it's been released?"
-        exit 1
-    fi
-    local readonly stable_update_dir_symlink="$TARGET_DIR/stable"
-    if [ ! -d "$stable_update_dir_symlink" ]; then
-        ln -s "$stable_update_dir" "$stable_update_dir_symlink"
-        ANY_CHANGES=true
-    else
-        if [[ "$( readlink "$stable_update_dir_symlink" || "")" != "$stable_update_dir" ]]; then
-            ln -fns "$stable_update_dir" "$stable_update_dir_symlink"
+        if [[ $( readlink "$target" || "") != "$source" ]]; then
+            ln -fs "$source" "$target"
             ANY_CHANGES=true
         fi
     fi
 }
 
+replace_dir_symlink() {
+    local readonly source="$1" target="$2"
+    if [ ! -d "$source" ]; then
+        echoerr "$source does not exists, are you sure it is released?"
+        exit 1
+    fi
+    if [ ! -d "$target" ]; then
+        ln -s "$source" "$target"
+        ANY_CHANGES=true
+    else
+        if [[ $( readlink "$target" || "") != "$source" ]]; then
+            ln -fns "$source" "$target"
+            ANY_CHANGES=true
+        fi
+    fi
+}
+
+update_stable_pointers() {
+    # shell
+    replace_file_symlink "$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar" "$TARGET_DIR/console/rascal-shell-stable.jar"
+    # update site
+    replace_dir_symlink "$TARGET_DIR/archive/$UPDATE_STABLE_VERSION" "$TARGET_DIR/stable"
+}
+
+update_release_pointers() {
+    local readonly last_shell_release=$(curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | tail -n 1 )
+    replace_file_symlink "$TARGET_DIR/console/rascal-$last_shell_release.jar" "$TARGET_DIR/console/rascal-shell-release.jar"
+
+    local readonly last_update_site_release=$(curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | tail -n 1 )
+    replace_dir_symlink "$TARGET_DIR/archive/$last_update_site_release" "$TARGET_DIR/release"
+}
 
 
 
@@ -281,6 +295,7 @@ update_update_site_snapshot() {
 
 download_all_releases
 update_stable_pointers 
+update_release_pointers 
 
 update_shell_snapshot
 update_update_site_snapshot "rascal-update-site" "$TARGET_DIR/unstable"
