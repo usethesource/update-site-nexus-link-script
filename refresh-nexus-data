@@ -46,6 +46,7 @@ download_console() {
     fi
     local readonly version="$1"
     local readonly target_jar="$TARGET_DIR/console/rascal-$version.jar"
+    local readonly target_sha256="$TARGET_DIR/console/rascal-$version.sha256"
     if [ ! -f "$target_jar" ]; then
         echo "Downloading console $version from nexus"
         if ! curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/resolve?g=org.rascalmpl&a=rascal&r=releases&v=$version" > /dev/null; then
@@ -53,6 +54,7 @@ download_console() {
             exit 2
         else
             curl -f -s -L "$NEXUS_ROOT/service/local/artifact/maven/content?g=org.rascalmpl&a=rascal&r=releases&v=$version" > "$target_jar"
+            sha256sum -b "$target_jar" > "$target_sha256"
             echo "Succesfully downloaded $version"
             ANY_CHANGES=true
         fi
@@ -137,6 +139,7 @@ replace_dir_symlink() {
 
 update_stable_pointers() {
     # shell
+    replace_file_symlink "$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.sha256" "$TARGET_DIR/console/rascal-shell-stable.sha256"
     replace_file_symlink "$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar" "$TARGET_DIR/console/rascal-shell-stable.jar"
     # update site
     replace_dir_symlink "$TARGET_DIR/archive/$UPDATE_STABLE_VERSION" "$TARGET_DIR/stable"
@@ -145,6 +148,7 @@ update_stable_pointers() {
 update_release_pointers() {
     local readonly last_shell_release=$(curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal/maven-metadata.xml" \
         | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | tail -n 1 )
+    replace_file_symlink "$TARGET_DIR/console/rascal-$last_shell_release.sha256" "$TARGET_DIR/console/rascal-shell-release.sha256"
     replace_file_symlink "$TARGET_DIR/console/rascal-$last_shell_release.jar" "$TARGET_DIR/console/rascal-shell-release.jar"
 
     local readonly last_update_site_release=$(curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
@@ -195,8 +199,11 @@ update_shell_snapshot() {
             exit 2
         else
             local readonly target_file="$TARGET_DIR/console/rascal-shell-unstable.jar"
+            local readonly target_sha256="$TARGET_DIR/console/rascal-shell-unstable.sha256"
             if [ ! -f "$target_file" ]; then
+                sha256sum -b "$new_file" > "$target_sha256"
                 if ! mv "$new_file" "$target_file"; then
+                    rm -f "$target_sha256"
                     echoerr "Could not create new file"
                     exit 4
                 else
@@ -216,6 +223,7 @@ update_shell_snapshot() {
                 echoerr "could not replace target file, might be in use, try again next time?"
                 exit 4
             fi
+            sha256sum -b "$new_file" > "$target_sha256"
             if ! mv "$new_file" "$target_file"; then
                 mv "$target_file_backup" "$target_file"
                 echoerr "Could not replace the file with the new file, putting back the old file"
