@@ -308,6 +308,7 @@ update_release_pointers
 update_shell_snapshot
 update_update_site_snapshot "rascal-update-site" "$TARGET_DIR/unstable"
 update_update_site_snapshot "rascal-eclipse-libraries-update-site" "$TARGET_DIR/libs"
+update_update_site_snapshot "rascal-core-update-site" "$TARGET_DIR/rascal-core-plugin"
 
 echo "$ANY_CHANGES"
 #update_unstable
