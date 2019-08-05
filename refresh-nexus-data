@@ -5,7 +5,18 @@ set -o nounset -o errexit -o pipefail
 # don't split on spaces, only on lines
 IFS=$'\n\t'
 
-echoerr() { echo "$@" 1>&2; }
+echoerr() { 
+	echo "$@" 1>&2;
+
+	if [[ -v SLACK_URL ]]; then
+		curl -silent --show-error --fail -X POST -H "Content-type: application/json" --data @- "$SLACK_URL" <<EOF
+			{
+				"channel": "rascal",
+				"text": "Update site sync script failed with: $@"
+			}
+EOF
+	fi
+ }
 
 #----------------------------------------#
 #            Configuration               #
@@ -25,6 +36,7 @@ readonly UPDATE_STABLE_VERSION="0.9.0"
 
 if [ $# -ne 1 ]; then
     echoerr "You must supply the target directory in which the output is stored."
+
     exit 1
 fi
 
