@@ -256,19 +256,19 @@ update_update_site_snapshot() {
         # now download the zip
         local readonly new_file="$SCRATCH/update-site.zip"
         if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/snapshots/org/rascalmpl/$product/$snapshot_version/$product-$full_build_string.zip" > "$new_file" ; then
-            echo "Failed downloading $product: $full_build_string from nexus"
+            echoerr "Failed downloading $product: $full_build_string from nexus"
             exit 2
         else
             local readonly new_dir="$SCRATCH/update-site"
             if ! unzip -qq "$new_file" -d "$new_dir"; then
-                echo "unpacking zip downloaded for version $version failed"
+                echoerr "unpacking zip downloaded for version $version failed"
                 exit 4
             fi
 
             local readonly target_update="$target"
             if [ ! -d "$target_update" ]; then
                 if ! mv "$new_dir" "$target_update"; then
-                    echo "Could not create new directory"
+                    echoerr "Could not create new directory $target_update"
                     exit 4
                 else
                     echo "Created new update-site directory"
@@ -280,16 +280,16 @@ update_update_site_snapshot() {
 
             local readonly target_update_backup="$target_update-backup"
             if [ -d "$target_update_backup" ]; then
-                echo "$target_update_backup still existed, something went wrong?"
+                echoerr "$target_update_backup still existed, something went wrong?"
                 exit 4
             fi
             if ! mv "$target_update" "$target_update_backup"; then
-                echo "could not replace target file, might be in use, try again next time?"
+                echoerr "could not replace target file, might be in use, try again next time? ($target_update_backup)"
                 exit 4
             fi
             if ! mv "$new_dir" "$target_update"; then
                 mv "$target_update_backup" "$target_update"
-                echo "Could not replace the file with the new file, putting back the old file"
+                echoerr "Could not replace the file with the new file, putting back the old file ($target_update_backup)"
                 exit 4
             else
                 echo "Replaced unstable update-site"
