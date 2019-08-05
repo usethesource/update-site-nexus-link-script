@@ -107,11 +107,11 @@ download_update_site() {
 download_all_releases() {
     curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal/maven-metadata.xml" \
         | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
-        download_console $version
+        download_console "$version"
     done
     curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
         | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
-        download_update_site $version
+        download_update_site "$version"
     done
 }
 
