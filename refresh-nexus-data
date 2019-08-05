@@ -9,7 +9,7 @@ echoerr() {
 	echo "$@" 1>&2;
 
 	if [ ! -z "${SLACK_URL+x}" ]; then
-		curl -silent --show-error --fail -X POST -H "Content-type: application/json" --data @- "$SLACK_URL" <<EOF
+		curl --show-error --fail -X POST -H "Content-type: application/json" --data @- "$SLACK_URL" <<EOF
 			{
 				"channel": "rascal",
 				"text": "Update site sync script failed with: $@"
