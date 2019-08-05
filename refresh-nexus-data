@@ -12,7 +12,7 @@ echoerr() {
 		curl --show-error --fail -X POST -H "Content-type: application/json" --data @- "$SLACK_URL" <<EOF
 			{
 				"channel": "rascal",
-				"text": "Update site sync script failed with: $@"
+				"text": "Error: $@"
 			}
 EOF
 	fi
@@ -273,7 +273,7 @@ update_update_site_snapshot() {
         else
             local readonly new_dir="$SCRATCH/update-site"
             if ! unzip -qq "$new_file" -d "$new_dir"; then
-                echoerr "unpacking zip downloaded for version $version failed"
+                echoerr "unpacking zip downloaded for version $new_file failed"
                 exit 4
             fi
 
