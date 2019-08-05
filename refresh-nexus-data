@@ -8,7 +8,7 @@ IFS=$'\n\t'
 echoerr() { 
 	echo "$@" 1>&2;
 
-	if [[ -v SLACK_URL ]]; then
+	if [[ -v "SLACK_URL" ]]; then
 		curl -silent --show-error --fail -X POST -H "Content-type: application/json" --data @- "$SLACK_URL" <<EOF
 			{
 				"channel": "rascal",
