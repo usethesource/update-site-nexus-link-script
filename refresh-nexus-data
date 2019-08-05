@@ -6,6 +6,7 @@ set -o nounset -o errexit -o pipefail
 IFS=$'\n\t'
 
 echoerr() { 
+    echo "$(date +%s):" 1>&2;
 	echo "$@" 1>&2;
 
 	if [ ! -z "${SLACK_URL+x}" ]; then
