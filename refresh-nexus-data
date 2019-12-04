@@ -26,9 +26,9 @@ EOF
 # new release
 
 # aka rascal version
-readonly SHELL_STABLE_VERSION="0.9.0"
+readonly SHELL_STABLE_VERSION="0.16.0"
 # aka rascal-eclipse version
-readonly UPDATE_STABLE_VERSION="0.9.0"
+readonly UPDATE_STABLE_VERSION="0.16.1"
 
 
 #----------------------------------------#
