@@ -42,7 +42,7 @@ if [ $# -ne 1 ]; then
 fi
 
 readonly TARGET_DIR="$1"
-readonly NEXUS_ROOT="http://nexus.usethesource.io/"
+readonly NEXUS_ROOT="https://nexus.usethesource.io/"
 
 readonly SCRATCH=$(mktemp -d -t "sync-nexus-XXXXX")
 finish() {
