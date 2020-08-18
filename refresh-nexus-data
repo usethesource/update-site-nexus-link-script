@@ -83,7 +83,7 @@ download_update_site() {
     fi
 
     local readonly target_sub_dir="$1"
-    local readonly id="$1"
+    local readonly id="$2"
     local readonly version="$3"
     local readonly target_update_site="$TARGET_DIR/$target_sub_dir/$version"
 
