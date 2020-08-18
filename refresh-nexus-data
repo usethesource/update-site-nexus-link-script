@@ -91,8 +91,9 @@ download_update_site() {
         echo "Downloading update site $version from nexus"
         local readonly zip_file="$SCRATCH/update-site.zip"
 
-        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/$id/$version/$id-$version.zip" > "$zip_file" ; then
-            echoerr "Error in downloading update site from nexus, version might not exist?"
+        local url="$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/$id/$version/$id-$version.zip"
+        if ! curl -f -s -L "$url" > "$zip_file" ; then
+            echoerr "Error in downloading update site from nexus: $url"
             exit 2;
         else
             # zip file has been downloaded, unpack and move to the 
@@ -109,19 +110,22 @@ download_update_site() {
     fi
 }
 
+download_all_update_sites_released() {
+    local readonly target_sub_dir="$1"
+    local readonly id="$2"
+    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/$id/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
+        download_update_site "$target_sub_dir" "$id" "$version"
+    done
+}
+
 download_all_releases() {
     curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal/maven-metadata.xml" \
         | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
         download_console "$version"
     done
-    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
-        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
-        download_update_site "archive" "rascal-update-site" "$version"
-    done
-    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/typepal-update-site/maven-metadata.xml" \
-        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
-        download_update_site "libraries/typepal" "typepal-update-site" "$version"
-    done
+    download_all_update_sites_released "archive" "rascal-update-site"
+    download_all_update_sites_released "libraries/typepal" "typepal-update-site"
 }
 
 replace_file_symlink() {
