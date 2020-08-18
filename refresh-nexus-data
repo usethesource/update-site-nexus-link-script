@@ -29,6 +29,8 @@ EOF
 readonly SHELL_STABLE_VERSION="0.18.2"
 # aka rascal-eclipse version
 readonly UPDATE_STABLE_VERSION="0.18.2"
+# typepal
+readonly TYPEPAL_STABLE_VERSION="0.4.7"
 
 
 #----------------------------------------#
@@ -80,19 +82,21 @@ download_update_site() {
         exit 1
     fi
 
-    local readonly version="$1"
-    local readonly target_update_site="$TARGET_DIR/archive/$version"
+    local readonly target_sub_dir="$1"
+    local readonly id="$1"
+    local readonly version="$3"
+    local readonly target_update_site="$TARGET_DIR/$target_sub_dir/$version"
 
     if [ ! -d "$target_update_site" ]; then
         echo "Downloading update site $version from nexus"
         local readonly zip_file="$SCRATCH/update-site.zip"
 
-        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/$version/rascal-update-site-$version.zip" > "$zip_file" ; then
+        if ! curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/$id/$version/$id-$version.zip" > "$zip_file" ; then
             echoerr "Error in downloading update site from nexus, version might not exist?"
             exit 2;
         else
             # zip file has been downloaded, unpack and move to the 
-            mkdir "$target_update_site"
+            mkdir -p "$target_update_site"
             if ! unzip -qq "$zip_file" -d "$target_update_site"; then
                 echoerr "unpacking zip downloaded for version $version failed"
                 rm -rf "$target_update_site"
@@ -112,7 +116,11 @@ download_all_releases() {
     done
     curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/rascal-update-site/maven-metadata.xml" \
         | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
-        download_update_site "$version"
+        download_update_site "archive" "rascal-update-site" "$version"
+    done
+    curl -f -s -L "$NEXUS_ROOT/content/repositories/releases/org/rascalmpl/typepal-update-site/maven-metadata.xml" \
+        | sed -n 's/^[ \t]*<version>\([0-9.]*\)<\/version>/\1/p' | while read -r version ; do
+        download_update_site "libraries/typepal" "typepal-update-site" "$version"
     done
 }
 
@@ -156,6 +164,8 @@ update_stable_pointers() {
     replace_file_symlink "$TARGET_DIR/console/rascal-$SHELL_STABLE_VERSION.jar" "$TARGET_DIR/console/rascal-shell-stable.jar"
     # update site
     replace_dir_symlink "$TARGET_DIR/archive/$UPDATE_STABLE_VERSION" "$TARGET_DIR/stable"
+    # typepal
+    replace_dir_symlink "$TARGET_DIR/libraries/typepal/$TYPEPAL_STABLE_VERSION" "$TARGET_DIR/typepal"
 }
 
 update_release_pointers() {
