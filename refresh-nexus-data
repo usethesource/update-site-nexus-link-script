@@ -30,7 +30,7 @@ readonly SHELL_STABLE_VERSION="0.18.2"
 # aka rascal-eclipse version
 readonly UPDATE_STABLE_VERSION="0.18.3"
 # typepal
-readonly TYPEPAL_STABLE_VERSION="0.4.7"
+readonly TYPEPAL_STABLE_VERSION="0.4.9"
 
 
 #----------------------------------------#
