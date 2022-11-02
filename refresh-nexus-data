@@ -26,11 +26,11 @@ EOF
 # new release
 
 # aka rascal version
-readonly SHELL_STABLE_VERSION="0.18.2"
+readonly SHELL_STABLE_VERSION="0.26.4"
 # aka rascal-eclipse version
-readonly UPDATE_STABLE_VERSION="0.18.3"
+readonly UPDATE_STABLE_VERSION="0.26.6"
 # typepal
-readonly TYPEPAL_STABLE_VERSION="0.4.10"
+readonly TYPEPAL_STABLE_VERSION="0.7.8"
 
 
 #----------------------------------------#
